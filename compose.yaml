@@ -1,37 +1,43 @@
 name: ag-coin-blockchain
 
+x-rust-service: &rust-service
+  image: docker.io/paritytech/ci-unified:latest
+  working_dir: /workspace
+  volumes:
+    - .:/workspace
+    - cargo-registry:/usr/local/cargo/registry
+    - cargo-git:/usr/local/cargo/git
+    - cargo-target:/workspace-target
+  environment:
+    CARGO_TARGET_DIR: /workspace-target
+    CARGO_BUILD_JOBS: "2"
+    WASM_BUILD_WORKSPACE_HINT: /workspace
+  mem_limit: 4g
+  cpus: 2
+  pids_limit: 512
+
 services:
+  build:
+    <<: *rust-service
+    command: ["cargo", "build", "--workspace", "--locked", "--release"]
+
   test:
-    image: docker.io/paritytech/ci-unified:latest
-    working_dir: /workspace
+    <<: *rust-service
     command: ["cargo", "test", "--workspace", "--locked"]
-    volumes:
-      - .:/workspace:ro
-      - cargo-registry:/usr/local/cargo/registry
-      - cargo-git:/usr/local/cargo/git
-      - cargo-target:/workspace-target
-    environment:
-      CARGO_TARGET_DIR: /workspace-target
-      CARGO_BUILD_JOBS: "2"
-    mem_limit: 4g
-    cpus: 2
-    pids_limit: 512
 
   node:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    <<: *rust-service
     command: ["--dev", "--rpc-external"]
+    entrypoint: ["/workspace-target/release/solochain-template-node"]
     ports:
       - "30333:30333"
       - "9933:9933"
       - "9944:9944"
       - "9615:9615"
     volumes:
+      - .:/workspace
+      - cargo-target:/workspace-target
       - node-data:/data
-    mem_limit: 4g
-    cpus: 2
-    pids_limit: 512
 
 volumes:
   cargo-registry:

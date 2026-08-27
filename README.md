@@ -26,7 +26,7 @@ All Rust builds, checks, and tests must run inside Docker Compose. Do not run
 `cargo build`, `cargo check`, or `cargo test` directly on the host.
 
 ```bash
-docker compose build node
+docker compose run --rm build
 docker compose run --rm test
 docker compose up node
 ```
