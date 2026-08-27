@@ -1,29 +1,6 @@
-// This is free and unencumbered software released into the public domain.
-//
-// Anyone is free to copy, modify, publish, use, compile, sell, or
-// distribute this software, either in source code form or as a compiled
-// binary, for any purpose, commercial or non-commercial, and by any
-// means.
-//
-// In jurisdictions that recognize copyright laws, the author or authors
-// of this software dedicate any and all copyright interest in the
-// software to the public domain. We make this dedication for the benefit
-// of the public at large and to the detriment of our heirs and
-// successors. We intend this dedication to be an overt act of
-// relinquishment in perpetuity of all present and future rights to this
-// software under copyright law.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-// IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR
-// OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
-// ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
-// OTHER DEALINGS IN THE SOFTWARE.
-//
-// For more information, please refer to <http://unlicense.org>
+// [파일 역할]: 노드-런타임 간 표준 인터페이스(Runtime APIs) 구현체
+// [주요 기능]: BlockBuilder, Core, Metadata, Aura/Grandpa 합의 API, AccountNonce, TransactionPayment, GenesisBuilder 등 구현
 
-// External crates imports
 use alloc::vec::Vec;
 use frame_support::{
 	genesis_builder_helper::{build_state, get_preset},
@@ -40,13 +17,14 @@ use sp_runtime::{
 };
 use sp_version::RuntimeVersion;
 
-// Local module imports
 use super::{
 	AccountId, Aura, Balance, Block, Executive, Grandpa, InherentDataExt, Nonce, Runtime,
 	RuntimeCall, RuntimeGenesisConfig, SessionKeys, System, TransactionPayment, VERSION,
 };
 
+// [런타임 API 매핑 Macro]: Substrate 노드 엔진이 런타임 Wasm을 호출할 수 있는 모든 표준 API 구현
 impl_runtime_apis! {
+	// [코어 API]: 런타임 버전 조회 및 블록 실행/초기화 진입점
 	impl sp_api::Core<Block> for Runtime {
 		fn version() -> RuntimeVersion {
 			VERSION
@@ -61,6 +39,7 @@ impl_runtime_apis! {
 		}
 	}
 
+	// [메타데이터 API]: 지갑 및 클라이언트 연동용 런타임 메타데이터 제공
 	impl sp_api::Metadata<Block> for Runtime {
 		fn metadata() -> OpaqueMetadata {
 			OpaqueMetadata::new(Runtime::metadata().into())
@@ -75,12 +54,14 @@ impl_runtime_apis! {
 		}
 	}
 
+	// [뷰 함수 API]: 온체인 뷰 함수 호출 디스패처
 	impl frame_support::view_functions::runtime_api::RuntimeViewFunction<Block> for Runtime {
 		fn execute_view_function(id: frame_support::view_functions::ViewFunctionId, input: Vec<u8>) -> Result<Vec<u8>, frame_support::view_functions::ViewFunctionDispatchError> {
 			Runtime::execute_view_function(id, input)
 		}
 	}
 
+	// [블록 빌더 API]: 블록 생성 시 트랜잭션 적용, 인히어런트 검증, 블록 마무리
 	impl sp_block_builder::BlockBuilder<Block> for Runtime {
 		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyExtrinsicResult {
 			Executive::apply_extrinsic(extrinsic)
@@ -102,6 +83,7 @@ impl_runtime_apis! {
 		}
 	}
 
+	// [트랜잭션 풀 유효성 검증 API]: 멤풀에 수신된 트랜잭션의 서명, 논스, 수수료 지불 능력 사전 검증
 	impl sp_transaction_pool::runtime_api::TaggedTransactionQueue<Block> for Runtime {
 		fn validate_transaction(
 			source: TransactionSource,
@@ -112,12 +94,14 @@ impl_runtime_apis! {
 		}
 	}
 
+	// [오프체인 워커 API]: 블록 임포트 후 오프체인 비동기 연산 진입점
 	impl sp_offchain::OffchainWorkerApi<Block> for Runtime {
 		fn offchain_worker(header: &<Block as BlockT>::Header) {
 			Executive::offchain_worker(header)
 		}
 	}
 
+	// [AURA 합의 API]: 슬롯 시간 및 블록 생성 권한자 목록 쿼리
 	impl sp_consensus_aura::AuraApi<Block, AuraId> for Runtime {
 		fn slot_duration() -> sp_consensus_aura::SlotDuration {
 			sp_consensus_aura::SlotDuration::from_millis(Aura::slot_duration())
@@ -128,6 +112,7 @@ impl_runtime_apis! {
 		}
 	}
 
+	// [세션 키 API]: 검증인 세션 키 생성 및 디코딩
 	impl sp_session::SessionKeys<Block> for Runtime {
 		fn generate_session_keys(seed: Option<Vec<u8>>) -> Vec<u8> {
 			SessionKeys::generate(seed)
@@ -140,6 +125,7 @@ impl_runtime_apis! {
 		}
 	}
 
+	// [GRANDPA 합의 API]: 블록 완결성 검증인 목록 및 세트 ID 조회
 	impl sp_consensus_grandpa::GrandpaApi<Block> for Runtime {
 		fn grandpa_authorities() -> sp_consensus_grandpa::AuthorityList {
 			Grandpa::grandpa_authorities()
@@ -163,19 +149,18 @@ impl_runtime_apis! {
 			_set_id: sp_consensus_grandpa::SetId,
 			_authority_id: GrandpaId,
 		) -> Option<sp_consensus_grandpa::OpaqueKeyOwnershipProof> {
-			// NOTE: this is the only implementation possible since we've
-			// defined our key owner proof type as a bottom type (i.e. a type
-			// with no values).
 			None
 		}
 	}
 
+	// [계정 논스 RPC API]: RPC 노드에서 특정 계정의 현재 논스 조회
 	impl frame_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Nonce> for Runtime {
 		fn account_nonce(account: AccountId) -> Nonce {
 			System::account_nonce(account)
 		}
 	}
 
+	// [트랜잭션 결제 RPC API]: 트랜잭션 예상 수수료 및 가중치 정보 쿼리
 	impl pallet_transaction_payment_rpc_runtime_api::TransactionPaymentApi<Block, Balance> for Runtime {
 		fn query_info(
 			uxt: <Block as BlockT>::Extrinsic,
@@ -197,6 +182,7 @@ impl_runtime_apis! {
 		}
 	}
 
+	// [트랜잭션 콜 단위 결제 RPC API]: 런타임 콜에 대한 수수료 세부 정보 조회
 	impl pallet_transaction_payment_rpc_runtime_api::TransactionPaymentCallApi<Block, Balance, RuntimeCall>
 		for Runtime
 	{
@@ -220,6 +206,7 @@ impl_runtime_apis! {
 		}
 	}
 
+	// [런타임 벤치마크 API]: 온체인 벤치마크 메타데이터 조회 및 디스패치
 	#[cfg(feature = "runtime-benchmarks")]
 	impl frame_benchmarking::Benchmark<Block> for Runtime {
 		fn benchmark_metadata(extra: bool) -> (
@@ -266,12 +253,10 @@ impl_runtime_apis! {
 		}
 	}
 
+	// [TryRuntime API]: 마이그레이션 및 런타임 업그레이드 전후 무결성 시뮬레이션 검사
 	#[cfg(feature = "try-runtime")]
 	impl frame_try_runtime::TryRuntime<Block> for Runtime {
 		fn on_runtime_upgrade(checks: frame_try_runtime::UpgradeCheckSelect) -> (Weight, Weight) {
-			// NOTE: intentional unwrap: we don't want to propagate the error backwards, and want to
-			// have a backtrace here. If any of the pre/post migration checks fail, we shall stop
-			// right here and right now.
 			let weight = Executive::try_runtime_upgrade(checks).unwrap();
 			(weight, super::configs::RuntimeBlockWeights::get().max_block)
 		}
@@ -282,12 +267,11 @@ impl_runtime_apis! {
 			signature_check: bool,
 			select: frame_try_runtime::TryStateSelect
 		) -> Weight {
-			// NOTE: intentional unwrap: we don't want to propagate the error backwards, and want to
-			// have a backtrace here.
 			Executive::try_execute_block(block, state_root_check, signature_check, select).expect("execute-block failed")
 		}
 	}
 
+	// [제네시스 빌더 API]: 초기 제네시스 상태 빌드 및 프리셋 목록 반환
 	impl sp_genesis_builder::GenesisBuilder<Block> for Runtime {
 		fn build_state(config: Vec<u8>) -> sp_genesis_builder::Result {
 			build_state::<RuntimeGenesisConfig>(config)
@@ -302,3 +286,4 @@ impl_runtime_apis! {
 		}
 	}
 }
+

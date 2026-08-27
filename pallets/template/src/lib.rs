@@ -1,198 +1,110 @@
+// [파일 역할]: AG-Coin 템플릿 팔렛 (Template Pallet) 구현체
+// [주요 기능]: 스토리지 값 저장(`do_something`), 값 증가 및 에러 처리(`cause_error`), 이벤트 및 에러 정의
+
 //! # Template Pallet
 //!
 //! A pallet with minimal functionality to help developers understand the essential components of
 //! writing a FRAME pallet. It is typically used in beginner tutorials or in Substrate template
 //! nodes as a starting point for creating a new pallet and **not meant to be used in production**.
-//!
-//! ## Overview
-//!
-//! This template pallet contains basic examples of:
-//! - declaring a storage item that stores a single `u32` value
-//! - declaring and using events
-//! - declaring and using errors
-//! - a dispatchable function that allows a user to set a new value to storage and emits an event
-//!   upon success
-//! - another dispatchable function that causes a custom error to be thrown
-//!
-//! Each pallet section is annotated with an attribute using the `#[pallet::...]` procedural macro.
-//! This macro generates the necessary code for a pallet to be aggregated into a FRAME runtime.
-//!
-//! Learn more about FRAME macros [here](https://docs.substrate.io/reference/frame-macros/).
-//!
-//! ### Pallet Sections
-//!
-//! The pallet sections in this template are:
-//!
-//! - A **configuration trait** that defines the types and parameters which the pallet depends on
-//!   (denoted by the `#[pallet::config]` attribute). See: [`Config`].
-//! - A **means to store pallet-specific data** (denoted by the `#[pallet::storage]` attribute).
-//!   See: [`storage_types`].
-//! - A **declaration of the events** this pallet emits (denoted by the `#[pallet::event]`
-//!   attribute). See: [`Event`].
-//! - A **declaration of the errors** that this pallet can throw (denoted by the `#[pallet::error]`
-//!   attribute). See: [`Error`].
-//! - A **set of dispatchable functions** that define the pallet's functionality (denoted by the
-//!   `#[pallet::call]` attribute). See: [`dispatchables`].
-//!
-//! Run `cargo doc --package pallet-template --open` to view this pallet's documentation.
 
-// We make sure this pallet uses `no_std` for compiling to Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
 
-// Re-export pallet items so that they can be accessed from the crate namespace.
+// [모듈 재내보내기]: 팔렛 항목들을 크레이트 네임스페이스로 공개
 pub use pallet::*;
 
-// FRAME pallets require their own "mock runtimes" to be able to run unit tests. This module
-// contains a mock runtime specific for testing this pallet's functionality.
 #[cfg(test)]
 mod mock;
 
-// This module contains the unit tests for this pallet.
-// Learn about pallet unit testing here: https://docs.substrate.io/test/unit-testing/
 #[cfg(test)]
 mod tests;
 
-// Every callable function or "dispatchable" a pallet exposes must have weight values that correctly
-// estimate a dispatchable's execution time. The benchmarking module is used to calculate weights
-// for each dispatchable and generates this pallet's weight.rs file. Learn more about benchmarking here: https://docs.substrate.io/test/benchmark/
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 pub mod weights;
 pub use weights::*;
 
-// All pallet logic is defined in its own module and must be annotated by the `pallet` attribute.
+// [프레임 팔렛 선언]: FRAME 매크로 기반 팔렛 모듈 정의
 #[frame_support::pallet]
 pub mod pallet {
-	// Import various useful types required by all FRAME pallets.
 	use super::*;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
-	// The `Pallet` struct serves as a placeholder to implement traits, methods and dispatchables
-	// (`Call`s) in this pallet.
+	// [목적 / 효과]: 팔렛 트레이트와 디스패처 메서드를 구현하기 위한 기본 구조체
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
 
-	/// The pallet's configuration trait.
-	///
-	/// All our types and constants a pallet depends on must be declared here.
-	/// These types are defined generically and made concrete when the pallet is declared in the
-	/// `runtime/src/lib.rs` file of your chain.
+	// [구성 트레이트 Config]: 팔렛이 의존하는 런타임 타입 및 가중치 정보 정의
 	#[pallet::config]
 	pub trait Config: frame_system::Config {
-		/// The overarching runtime event type.
+		/// 전체 런타임 이벤트 타입
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
-		/// A type representing the weights required by the dispatchables of this pallet.
+		/// 팔렛 디스패처 호출에 필요한 가중치(Weight) 계산 인터페이스
 		type WeightInfo: WeightInfo;
 	}
 
-	/// A storage item for this pallet.
-	///
-	/// In this template, we are declaring a storage item called `Something` that stores a single
-	/// `u32` value. Learn more about runtime storage here: <https://docs.substrate.io/build/runtime-storage/>
+	// [상태 저장소 Storage]: 단일 u32 정수값을 보관하는 온체인 스토리지 항목
 	#[pallet::storage]
 	pub type Something<T> = StorageValue<_, u32>;
 
-	/// Events that functions in this pallet can emit.
-	///
-	/// Events are a simple means of indicating to the outside world (such as dApps, chain explorers
-	/// or other users) that some notable update in the runtime has occurred. In a FRAME pallet, the
-	/// documentation for each event field and its parameters is added to a node's metadata so it
-	/// can be used by external interfaces or tools.
-	///
-	///	The `generate_deposit` macro generates a function on `Pallet` called `deposit_event` which
-	/// will convert the event type of your pallet into `RuntimeEvent` (declared in the pallet's
-	/// [`Config`] trait) and deposit it using [`frame_system::Pallet::deposit_event`].
+	// [이벤트 정의 Event]: 상태 변경 발생 시 외부 클라이언트 및 탐색기에 전파하는 이벤트 목록
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// A user has successfully set a new value.
+		/// 사용자가 새로운 값을 성공적으로 스토리지에 저장했을 때 발생하는 이벤트
 		SomethingStored {
-			/// The new value set.
+			/// 저장된 새로운 u32 값
 			something: u32,
-			/// The account who set the new value.
+			/// 값을 설정한 서명자 계정
 			who: T::AccountId,
 		},
 	}
 
-	/// Errors that can be returned by this pallet.
-	///
-	/// Errors tell users that something went wrong so it's important that their naming is
-	/// informative. Similar to events, error documentation is added to a node's metadata so it's
-	/// equally important that they have helpful documentation associated with them.
-	///
-	/// This type of runtime error can be up to 4 bytes in size should you want to return additional
-	/// information.
+	// [에러 정의 Error]: 디스패처 호출 실패 시 반환되는 런타임 에러 목록
 	#[pallet::error]
 	pub enum Error<T> {
-		/// The value retrieved was `None` as no value was previously set.
+		/// 스토리지에 값이 설정되어 있지 않아 읽을 수 없음
 		NoneValue,
-		/// There was an attempt to increment the value in storage over `u32::MAX`.
+		/// 스토리지 값 1 증가 시 u32 오버플로우가 발생함
 		StorageOverflow,
 	}
 
-	/// The pallet's dispatchable functions ([`Call`]s).
-	///
-	/// Dispatchable functions allows users to interact with the pallet and invoke state changes.
-	/// These functions materialize as "extrinsics", which are often compared to transactions.
-	/// They must always return a `DispatchResult` and be annotated with a weight and call index.
-	///
-	/// The [`call_index`] macro is used to explicitly
-	/// define an index for calls in the [`Call`] enum. This is useful for pallets that may
-	/// introduce new dispatchables over time. If the order of a dispatchable changes, its index
-	/// will also change which will break backwards compatibility.
-	///
-	/// The [`weight`] macro is used to assign a weight to each call.
+	// [호출 함수 (Extrinsics / Dispatchables)]: 사용자가 서명 트랜잭션으로 호출 가능한 외부 함수 목록
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// An example dispatchable that takes a single u32 value as a parameter, writes the value
-		/// to storage and emits an event.
-		///
-		/// It checks that the _origin_ for this call is _Signed_ and returns a dispatch
-		/// error if it isn't. Learn more about origins here: <https://docs.substrate.io/build/origins/>
+		// [목적 / 효과]: 스토리지에 전달받은 u32 값을 직접 저장하고 `SomethingStored` 이벤트를 방출
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::do_something())]
 		pub fn do_something(origin: OriginFor<T>, something: u32) -> DispatchResult {
-			// Check that the extrinsic was signed and get the signer.
+			// 1. 호출자 서명 검증 및 계정 ID 획득
 			let who = ensure_signed(origin)?;
 
-			// Update storage.
+			// 2. 온체인 스토리지에 새로운 값 기록
 			Something::<T>::put(something);
 
-			// Emit an event.
+			// 3. 상태 변경 이벤트 방출
 			Self::deposit_event(Event::SomethingStored { something, who });
 
-			// Return a successful `DispatchResult`
+			// 4. 성공 결과 반환
 			Ok(())
 		}
 
-		/// An example dispatchable that may throw a custom error.
-		///
-		/// It checks that the caller is a signed origin and reads the current value from the
-		/// `Something` storage item. If a current value exists, it is incremented by 1 and then
-		/// written back to storage.
-		///
-		/// ## Errors
-		///
-		/// The function will return an error under the following conditions:
-		///
-		/// - If no value has been set ([`Error::NoneValue`])
-		/// - If incrementing the value in storage causes an arithmetic overflow
-		///   ([`Error::StorageOverflow`])
+		// [목적 / 효과]: 기존 스토리지 값을 읽어 1을 더한 후 다시 저장하며, 비어있거나 오버플로우 발생 시 에러 반환
 		#[pallet::call_index(1)]
 		#[pallet::weight(T::WeightInfo::cause_error())]
 		pub fn cause_error(origin: OriginFor<T>) -> DispatchResult {
+			// 1. 호출자 서명 검증
 			let _who = ensure_signed(origin)?;
 
-			// Read a value from storage.
+			// 2. 기존 스토리지 값 확인 및 가산 처리
 			match Something::<T>::get() {
-				// Return an error if the value has not been set.
+				// [실패 1]: 스토리지에 값이 존재하지 않는 경우
 				None => Err(Error::<T>::NoneValue.into()),
+				// [성공/가산]: 값이 존재할 때 1 증가 후 저장
 				Some(old) => {
-					// Increment the value read from storage. This will cause an error in the event
-					// of overflow.
+					// [실패 2]: u32 최대값 초과로 오버플로우 발생 시 에러 반환
 					let new = old.checked_add(1).ok_or(Error::<T>::StorageOverflow)?;
-					// Update the value in storage with the incremented result.
+					// 새로운 값으로 스토리지 갱신
 					Something::<T>::put(new);
 					Ok(())
 				},
@@ -200,3 +112,4 @@ pub mod pallet {
 		}
 	}
 }
+
